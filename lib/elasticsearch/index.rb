@@ -237,8 +237,12 @@ module Elasticsearch
       logger.debug "Request payload: #{payload}"
       result = @client.get_with_payload("_search", payload)
       result = MultiJson.decode(result)
-      result["hits"]["hits"].map { |hit|
-        document_from_hash(hit["_source"].merge("es_score" => hit["_score"]))
+
+      return {
+        "hits" => result["hits"]["hits"].map { |hit|
+          document_from_hash(hit["_source"].merge("es_score" => hit["_score"]))
+        },
+        "total" => result["hits"]["total"]
       }
     end
 
