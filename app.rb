@@ -10,6 +10,7 @@ require "statsd"
 
 require "document"
 require "result_set_presenter"
+require "organisation_set_presenter"
 require "document_series_registry"
 require "organisation_registry"
 require "topic_registry"
@@ -83,8 +84,24 @@ class Rummager < Sinatra::Application
     content_type :json
   end
 
-  # /index_name/search?q=pie to search a named index
-  # /search?q=pie to search the primary index
+  # To search a named index:
+  #   /index_name/search?q=pie
+  #
+  # To search the primary index:
+  #   /search?q=pie
+  #
+  # To scope a search to an organisation:
+  #   /search?q=pie&organisation_slug=home-office
+  #
+  # To get the results in a Hash:
+  #   /search?q=pie&response_style=hash
+  #
+  #   {
+  #     "total": 1,
+  #     "results": [
+  #       ...
+  #     ]
+  #   }
   get "/?:index?/search.?:format?" do
     json_only
 
@@ -96,15 +113,20 @@ class Rummager < Sinatra::Application
     end
 
     expires 3600, :public if query.length < 20
-
-    result_set = current_index.search(query)
+    organisation = params["organisation_slug"].blank? ? nil : params["organisation_slug"]
+    result_set = current_index.search(query, organisation)
     presenter_context = {
       organisation_registry: organisation_registry,
       topic_registry: topic_registry,
       document_series_registry: document_series_registry,
       world_location_registry: world_location_registry
     }
-    ResultSetPresenter.new(result_set, presenter_context).present
+    presenter = ResultSetPresenter.new(result_set, presenter_context)
+    if params["response_style"] == "hash"
+      presenter.present_with_total
+    else
+      presenter.present
+    end
   end
 
   get "/:index/advanced_search.?:format?" do
@@ -112,6 +134,13 @@ class Rummager < Sinatra::Application
 
     result_set = current_index.advanced_search(request.params)
     ResultSetPresenter.new(result_set).present_with_total
+  end
+
+  get "/organisations.?:format" do
+    json_only
+
+    organisations = organisation_registry.all
+    OrganisationSetPresenter.new(organisations).present_with_total
   end
 
   post "/?:index?/documents" do

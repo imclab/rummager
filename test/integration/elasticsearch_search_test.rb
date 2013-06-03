@@ -14,6 +14,7 @@ class ElasticsearchSearchTest < IntegrationTest
       properties.merge!({
                           "search_format_types" => { "type" => "string", "index" => "not_analyzed" },
                           "public_timestamp" => { "type" => "date", "index" => "not_analyzed" },
+                          "organisations" => { "type" => "string", "index" => "not_analyzed" },
                         })
     end
 
@@ -76,6 +77,12 @@ class ElasticsearchSearchTest < IntegrationTest
       {
         "title" => "Pork pies",
         "link" => "/pork-pies"
+      },
+      {
+        "title" => "Written by the Home Office",
+        "link" => "/written-by-ho",
+        "indexable_content" => "Written by the Home Office",
+        "organisations" => "home-office"
       }
     ]
   end
@@ -91,9 +98,17 @@ class ElasticsearchSearchTest < IntegrationTest
     post "/commit", nil
   end
 
-  def assert_result_links(*links)
+  def assert_result_links(*expected_links)
     parsed_response = MultiJson.decode(last_response.body)
-    assert_equal links, parsed_response.map { |r| r["link"] }
+    case parsed_response
+      when Hash
+        result_links = parsed_response["results"].map { |r| r["link"] }
+      when Array
+        result_links = parsed_response.map { |r| r["link"] }
+      else
+        raise "I don't know how to parse #{parsed_response.class}"
+    end
+    assert_equal expected_links, result_links
   end
 
   def test_documents_with_public_timestamp_exhibit_a_decay_boost
@@ -106,6 +121,18 @@ class ElasticsearchSearchTest < IntegrationTest
     get "/search.json?q=badger"
     assert last_response.ok?
     assert_result_links "/an-example-answer"
+  end
+
+  def test_can_scope_by_organisation
+    get "/search.json?q=written&organisation_slug=home-office"
+    assert last_response.ok?
+    assert_result_links "/written-by-ho"
+  end
+
+  def test_no_results_when_scoped_by_organisation
+    get "/search.json?q=written&organisation_slug=ministry-of-justice"
+    assert last_response.ok?
+    assert_result_links # assert no results
   end
 
   def test_should_match_stems
@@ -173,5 +200,14 @@ class ElasticsearchSearchTest < IntegrationTest
     get "/search.json?q=PORK+PIES"
     assert last_response.ok?
     assert_result_links "/pork-pies"
+  end
+
+  def test_can_specify_hash_response_style
+    get "/search.json?q=badger&response_style=hash"
+    assert last_response.ok?
+    parsed_response = MultiJson.decode(last_response.body)
+    assert parsed_response.is_a?(Hash)
+    assert_equal ["total", "results"], parsed_response.keys
+    assert_result_links "/an-example-answer"
   end
 end
