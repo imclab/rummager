@@ -524,7 +524,7 @@ index:
         query_default:
           type: custom
           tokenizer: standard
-          filter: [standard, lowercase, stop, synonym, stemmer_english]
+          filter: [standard, lowercase, stop, synonym, stemmer_english, filter_shingle]
       filter:
         synonym:
           type: synonym
@@ -535,6 +535,11 @@ index:
         stemmer_english:
           type: stemmer
           name: englishmappings:
+        filter_shingle:
+          type: shingle
+          max_shingle_size: 5
+          min_shingle_size: 2
+          output_unigrams: true
 mappings:
   default:
     edition:

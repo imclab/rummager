@@ -15,6 +15,8 @@ namespace :health_check do
   task :run do
     test_data = DATA_DIR + "government-weighted-search-terms.csv"
     index_name = "government"
+    test_data = DATA_DIR + "mainstream-weighted-search-terms.csv"
+    index_name = "mainstream"
     result = HealthCheck::Checker.new(index: index_name, test_data: test_data).run!
     result.summarise("#{index_name.capitalize} score")
   end

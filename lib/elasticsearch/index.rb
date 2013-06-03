@@ -176,9 +176,114 @@ module Elasticsearch
 
     def search(query, organisation=nil)
       builder = SearchQueryBuilder.new(query, organisation)
-      payload = builder.query_hash.to_json
+      # payload = builder.query_hash.to_json
 
-      logger.debug "Request payload: #{payload}"
+      # Per-format boosting done as a filter, so the results get cached on the
+      # server, as they are the same for each query
+
+      boosted_formats = {
+        # Mainstream formats
+        "smart-answer"  => 1.5,
+        "transaction"   => 1.5,
+        # Inside Gov formats
+        "topical_event" => 1.5,
+        "minister"      => 1.7,
+        "organisation"  => 2.5,
+        "topic"         => 1.2,
+        "document_series" => 1.3,
+        "operational_field" => 1.5,
+      }
+
+      format_boosts = boosted_formats.map do |format, boost|
+        {
+          filter: { term: { format: format } },
+          boost: boost
+        }
+      end
+
+      # An implementation of http://wiki.apache.org/solr/FunctionQuery#recip
+      # Curve for 2 months: http://www.wolframalpha.com/share/clip?f=d41d8cd98f00b204e9800998ecf8427e5qr62u0si
+      #
+      # Behaves as a freshness boost for newer documents with a public_timestamp and search_format_types announcement
+      time_boost = {
+        filter: { term: { search_format_types: "announcement" } },
+        script: "((0.05 / ((3.16*pow(10,-11)) * abs(time() - doc['public_timestamp'].date.getMillis()) + 0.05)) + 0.12)"
+      }
+
+      query_analyzer = "query_default"
+
+      match_fields = {
+        "title" => 5,
+        "description" => 2,
+        "indexable_content" => 1,
+      }
+
+      number_of_words = query.split(' ').length
+
+      if number_of_words <= 3
+        fields = ["title^5", "description^3", "indexable_content"]
+        exact_boost = 4
+      else
+        fields = ["title", "description", "indexable_content^4"]
+        exact_boost = 8
+      end
+
+      payload = {
+        from: 0,
+        size: 50,
+        # explain: true,
+        query: {
+          custom_filters_score: {
+            query: {
+              bool: {
+                must: {
+                  multi_match: {
+                    query: escape(query),
+                    operator: "or",
+                    fields: fields,
+                    analyzer: query_analyzer
+                  },
+                },
+                should: [
+                  {
+                    text: {
+                      "title" => {
+                        query: escape(query),
+                        type: "phrase",
+                        boost: exact_boost,
+                        analyzer: query_analyzer
+                      }
+                    }
+                  },
+                  {
+                    text: {
+                      "indexable_content" => {
+                        query: escape(query),
+                        type: "phrase",
+                        boost: exact_boost,
+                        analyzer: query_analyzer
+                      },
+                    }
+                  },
+                  {
+                    text: {
+                      "description" => {
+                        query: escape(query),
+                        type: "phrase",
+                        boost: exact_boost,
+                        analyzer: query_analyzer
+                      },
+                    }
+                  }
+                ]
+              }
+            },
+            filters: format_boosts + [time_boost]
+          },
+          min_score: 0.1
+        }
+      }.to_json
+
       response = @client.get_with_payload("_search", payload)
       ResultSet.new(@mappings, MultiJson.decode(response))
     end
@@ -205,8 +310,7 @@ module Elasticsearch
 
       payload.merge!(query_builder.query_hash)
 
-      logger.info "Request payload: #{payload.to_json}"
-
+      logger.debug "Request payload: #{payload.to_json}"
       result = @client.get_with_payload("_search", payload.to_json)
       ResultSet.new(@mappings, MultiJson.decode(result))
     end
