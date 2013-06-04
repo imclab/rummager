@@ -524,7 +524,11 @@ index:
         query_default:
           type: custom
           tokenizer: standard
-          filter: [standard, lowercase, stop, synonym, stemmer_english, filter_shingle]
+          filter: [standard, lowercase, stop, synonym, stemmer_english]
+        shingled_query_analyzer:
+          type: custom
+          tokenizer: standard
+          filter: [standard, lowercase, stop, stemmer_english, filter_shingle]
       filter:
         synonym:
           type: synonym
@@ -534,12 +538,11 @@ index:
           rules: *stems
         stemmer_english:
           type: stemmer
-          name: englishmappings:
+          name: english
         filter_shingle:
           type: shingle
-          max_shingle_size: 5
+          max_shingle_size: 2
           min_shingle_size: 2
-          output_unigrams: true
 mappings:
   default:
     edition:

@@ -183,15 +183,15 @@ module Elasticsearch
 
       boosted_formats = {
         # Mainstream formats
-        "smart-answer"  => 1.5,
-        "transaction"   => 1.5,
+        "smart-answer"  => 1.1,
+        "transaction"   => 1.1,
         # Inside Gov formats
-        "topical_event" => 1.5,
-        "minister"      => 1.7,
-        "organisation"  => 2.5,
-        "topic"         => 1.2,
-        "document_series" => 1.3,
-        "operational_field" => 1.5,
+        "topical_event" => 1.1,
+        "minister"      => 1.2,
+        "organisation"  => 1.3,
+        "topic"         => 1.05,
+        "document_series" => 1.1,
+        "operational_field" => 1.1,
       }
 
       format_boosts = boosted_formats.map do |format, boost|
@@ -212,77 +212,65 @@ module Elasticsearch
 
       query_analyzer = "query_default"
 
-      match_fields = {
-        "title" => 5,
-        "description" => 2,
-        "indexable_content" => 1,
-      }
-
       number_of_words = query.split(' ').length
 
-      if number_of_words <= 3
-        fields = ["title^5", "description^3", "indexable_content"]
-        exact_boost = 4
-      else
-        fields = ["title", "description", "indexable_content^4"]
-        exact_boost = 8
-      end
+      fields = ["title", "description", "indexable_content"]
+      exact_boost = 1
 
       payload = {
         from: 0,
         size: 50,
-        # explain: true,
         query: {
-          custom_filters_score: {
-            query: {
-              bool: {
-                must: {
-                  multi_match: {
-                    query: escape(query),
-                    operator: "or",
-                    fields: fields,
-                    analyzer: query_analyzer
-                  },
-                },
-                should: [
-                  {
-                    text: {
-                      "title" => {
+          bool: {
+            should: [
+              {
+                bool: {
+                  should: [
+                    match_phrase: {
+                      title: {
                         query: escape(query),
-                        type: "phrase",
-                        boost: exact_boost,
-                        analyzer: query_analyzer
+                        analyzer: "query_default",
                       }
-                    }
-                  },
-                  {
-                    text: {
-                      "indexable_content" => {
+                    },
+                    match_phrase: {
+                      description: {
                         query: escape(query),
-                        type: "phrase",
-                        boost: exact_boost,
-                        analyzer: query_analyzer
-                      },
-                    }
-                  },
-                  {
-                    text: {
-                      "description" => {
+                        analyzer: "query_default",
+                      }
+                    },
+                    match_phrase: {
+                      indexable_content: {
                         query: escape(query),
-                        type: "phrase",
-                        boost: exact_boost,
-                        analyzer: query_analyzer
-                      },
-                    }
-                  }
-                ]
+                        analyzer: "query_default",
+                      }
+                    },
+                  ],
+                  minimum_number_should_match: 1
+                }
+              },
+              {
+                multi_match: {
+                  query: escape(query),
+                  operator: "and",
+                  fields: fields,
+                  analyzer: "query_default",
+                }
+              },
+              {
+                multi_match: {
+                  query: escape(query),
+                  operator: "or",
+                  fields: fields,
+                  analyzer: "shingled_query_analyzer",
+                }
               }
-            },
-            filters: format_boosts + [time_boost]
-          },
-          min_score: 0.1
+            ],
+            minimum_number_should_match: 1
+          }
         }
       }.to_json
+
+      # puts "Here is the payload:\n\n#{payload}\n\n"
 
       response = @client.get_with_payload("_search", payload)
       ResultSet.new(@mappings, MultiJson.decode(response))
