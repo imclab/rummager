@@ -183,15 +183,15 @@ module Elasticsearch
 
       boosted_formats = {
         # Mainstream formats
-        "smart-answer"  => 1.1,
-        "transaction"   => 1.1,
+        "smart-answer"  => 1.5,
+        "transaction"   => 1.5,
         # Inside Gov formats
-        "topical_event" => 1.1,
-        "minister"      => 1.2,
-        "organisation"  => 1.3,
-        "topic"         => 1.05,
-        "document_series" => 1.1,
-        "operational_field" => 1.1,
+        "topical_event" => 1.5,
+        "minister"      => 2,
+        "organisation"  => 2.5,
+        "topic"         => 1.2,
+        "document_series" => 1.5,
+        "operational_field" => 1.5,
       }
 
       format_boosts = boosted_formats.map do |format, boost|
