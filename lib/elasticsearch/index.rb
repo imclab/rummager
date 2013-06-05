@@ -221,51 +221,66 @@ module Elasticsearch
         from: 0,
         size: 50,
         query: {
-          bool: {
-            should: [
-              {
-                bool: {
-                  should: [
-                    match_phrase: {
-                      title: {
+          custom_filters_score: {
+            query: {
+              bool: {
+                should: [
+                  {
+                    bool: {
+                      should: [
+                        match_phrase: {
+                          title: {
+                            query: escape(query),
+                            analyzer: "query_default",
+                          }
+                        },
+                        match_phrase: {
+                          description: {
+                            query: escape(query),
+                            analyzer: "query_default",
+                          }
+                        },
+                        match_phrase: {
+                          indexable_content: {
+                            query: escape(query),
+                            analyzer: "query_default",
+                          }
+                        },
+                      ],
+                      minimum_number_should_match: 1
+                    }
+                  },
+                  {
+                    multi_match: {
+                      query: escape(query),
+                      operator: "and",
+                      fields: fields,
+                      analyzer: "query_default"
+                    }
+                  },
+                  {
+                    multi_match: {
+                      query: escape(query),
+                      operator: "or",
+                      fields: fields,
+                      analyzer: "shingled_query_analyzer"
+                    }
+                  },
+                  {
+                    match: {
+                      _all: {
                         query: escape(query),
                         analyzer: "query_default",
+                        # boost: 3.5,
+                        minimum_should_match: "1<2 2<3 3<3"
                       }
-                    },
-                    match_phrase: {
-                      description: {
-                        query: escape(query),
-                        analyzer: "query_default",
-                      }
-                    },
-                    match_phrase: {
-                      indexable_content: {
-                        query: escape(query),
-                        analyzer: "query_default",
-                      }
-                    },
-                  ],
-                  minimum_number_should_match: 1
-                }
-              },
-              {
-                multi_match: {
-                  query: escape(query),
-                  operator: "and",
-                  fields: fields,
-                  analyzer: "query_default",
-                }
-              },
-              {
-                multi_match: {
-                  query: escape(query),
-                  operator: "or",
-                  fields: fields,
-                  analyzer: "shingled_query_analyzer",
-                }
+                    }
+                  }
+                ],
+                minimum_number_should_match: 1
               }
-            ],
-            minimum_number_should_match: 1
+            },
+            filters: format_boosts + [ time_boost ]
           }
         }
       }.to_json
