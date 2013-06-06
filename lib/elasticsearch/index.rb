@@ -217,6 +217,17 @@ module Elasticsearch
       fields = ["title", "description", "indexable_content"]
       exact_boost = 1
 
+      exact_field_boost = fields.map {|field|
+        {
+          match_phrase: {
+            field => {
+              query: escape(query),
+              analyzer: "query_default",
+            }
+          }
+        }
+      }
+
       payload = {
         from: 0,
         size: 50,
@@ -224,32 +235,16 @@ module Elasticsearch
           custom_filters_score: {
             query: {
               bool: {
-                should: [
-                  {
-                    bool: {
-                      should: [
-                        match_phrase: {
-                          title: {
-                            query: escape(query),
-                            analyzer: "query_default",
-                          }
-                        },
-                        match_phrase: {
-                          description: {
-                            query: escape(query),
-                            analyzer: "query_default",
-                          }
-                        },
-                        match_phrase: {
-                          indexable_content: {
-                            query: escape(query),
-                            analyzer: "query_default",
-                          }
-                        },
-                      ],
-                      minimum_number_should_match: 1
+                must: {
+                  match: {
+                    _all: {
+                      query: escape(query),
+                      analyzer: "query_default",
+                      minimum_should_match: "3<3 7<50%"
                     }
-                  },
+                  }
+                },
+                should: exact_field_boost + [
                   {
                     multi_match: {
                       query: escape(query),
@@ -264,16 +259,6 @@ module Elasticsearch
                       operator: "or",
                       fields: fields,
                       analyzer: "shingled_query_analyzer"
-                    }
-                  },
-                  {
-                    match: {
-                      _all: {
-                        query: escape(query),
-                        analyzer: "query_default",
-                        # boost: 3.5,
-                        minimum_should_match: "1<2 2<3 3<3"
-                      }
                     }
                   }
                 ],
