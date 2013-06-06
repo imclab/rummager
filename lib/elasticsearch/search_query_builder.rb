@@ -14,12 +14,12 @@ module Elasticsearch
     def query_hash
       must_conditions = [
         {
-          query_string: {
-            fields: match_fields.map { |name, boost|
-              boost == 1 ? name : "#{name}^#{boost}"
-            },
-            query: escape(@query),
-            analyzer: QUERY_ANALYZER
+          match: {
+            _all: {
+              query: escape(@query),
+              analyzer: QUERY_ANALYZER,
+              minimum_should_match: "3<3 7<50%"
+            }
           }
         }
       ]
@@ -37,7 +37,8 @@ module Elasticsearch
             query: {
               bool: {
                 must: must_conditions,
-                should: shingle_boosts
+                should: exact_field_boosts + [ exact_match_boost, shingle_token_filter_boost ],
+                minimum_number_should_match: 1
               }
             },
             filters: format_boosts + [time_boost]
@@ -75,6 +76,41 @@ module Elasticsearch
           }
         end
       end
+    end
+
+    def shingle_token_filter_boost
+      {
+        multi_match: {
+          query: escape(@query),
+          operator: "or",
+          fields: match_fields.keys,
+          analyzer: "shingled_query_analyzer"
+        }
+      }
+    end
+
+    def exact_field_boosts
+      match_fields.map {|field_name, _|
+        {
+          match_phrase: {
+            field_name => {
+              query: escape(@query),
+              analyzer: QUERY_ANALYZER,
+            }
+          }
+        }
+      }
+    end
+
+    def exact_match_boost
+      {
+        multi_match: {
+          query: escape(@query),
+          operator: "and",
+          fields: match_fields.keys,
+          analyzer: QUERY_ANALYZER
+        }
+      }
     end
 
     def boosted_formats
