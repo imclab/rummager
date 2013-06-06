@@ -13,10 +13,8 @@ namespace :health_check do
 
   desc "run health checks"
   task :run do
-    test_data = DATA_DIR + "government-weighted-search-terms.csv"
-    index_name = "government"
-    test_data = DATA_DIR + "mainstream-weighted-search-terms.csv"
-    index_name = "mainstream"
+    index_name = ENV["RUMMAGER_INDEX"] || "government"
+    test_data = DATA_DIR + "#{index_name}-weighted-search-terms.csv"
     result = HealthCheck::Checker.new(index: index_name, test_data: test_data).run!
     result.summarise("#{index_name.capitalize} score")
   end
